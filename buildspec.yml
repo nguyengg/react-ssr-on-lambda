@@ -1,0 +1,34 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: latest
+    on-failure: ABORT
+    commands:
+      - n 16 && node -v && npm -v
+      - npm ci
+  pre_build:
+    on-failure: ABORT
+    commands:
+      - npm run lint
+  build:
+    on-failure: ABORT
+    commands:
+      - npm run build
+      - zip -jmX handler.zip dist/index.js dist/index.js.map dist/manifest.json
+  post_build:
+    on-failure: ABORT
+    commands:
+      - aws lambda update-function-code --function-name webapp --zip-file fileb://`readlink -f handler.zip`
+      - aws lambda wait function-updated --function-name webapp
+      - aws s3 sync dist "s3://${BUCKET}" --delete --size-only --cache-control 'public, max-age=604800, immutable'
+
+artifacts:
+  files:
+    - 'dist/**/*'
+    - 'handler.zip'
+
+cache:
+  paths:
+    - 'node_modules/**/*'
